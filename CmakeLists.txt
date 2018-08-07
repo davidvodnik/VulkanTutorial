@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.12)
+
+add_subdirectory(thirdparty/glfw)
+
+add_executable(vulkan_tutorial 
+	src/main.cc)
+target_include_directories(vulkan_tutorial PRIVATE ${VULKAN_INCLUDE_DIR})
+target_link_libraries(vulkan_tutorial PRIVATE glfw ${VULKAN_LIBRARY})
