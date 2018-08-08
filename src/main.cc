@@ -3,24 +3,51 @@
 
 #include <iostream>
 
-int main() {
-	glfwInit();
+const int WIDTH = 800;
+const int HEIGHT = 600;
 
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan Tutorial", nullptr, nullptr);
-
-	uint32_t extensionCount;
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-
-	std::cout << extensionCount << " extensions supported" << std::endl;
-
-	while (!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
+class HelloTriangleApplication {
+public:
+	void Run() {
+		InitWindow();
+		InitVulkan();
+		MainLoop();
+		Cleanup();
 	}
 
-	glfwDestroyWindow(window);
+private:
+	void InitWindow() {
+		glfwInit();
 
-	glfwTerminate();
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_FALSE);
+		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
+		window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+	}
+
+	void InitVulkan() {
+
+	}
+
+	void MainLoop() {
+		while (!glfwWindowShouldClose(window)) {
+			glfwPollEvents();
+		}
+	}
+
+	void Cleanup() {
+		glfwDestroyWindow(window);
+
+		glfwTerminate();
+	}
+
+	GLFWwindow* window;
+};
+
+int main() {
+	HelloTriangleApplication app;
+
+	app.Run();
 
 	return 0;
 }
