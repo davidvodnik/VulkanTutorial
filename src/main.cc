@@ -46,6 +46,14 @@ void DestroyDebugUtilsMessengerEXT(
 	}
 }
 
+struct QueueFamilyIndices {
+	int graphics_family = -1;
+
+	bool IsComplete() {
+		return graphics_family >= 0;
+	}
+};
+
 class HelloTriangleApplication {
 public:
 	void Run() {
@@ -68,6 +76,7 @@ private:
 	void InitVulkan() {
 		CreateInstance();
 		SetupDebugCallback();
+		PickPhysicalDevice();
 	}
 
 	void CreateInstance() {
@@ -185,6 +194,52 @@ private:
 		}
 	}
 
+	void PickPhysicalDevice() {
+		uint32_t device_count = 0;
+		vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
+		if (device_count == 0) {
+			assert(0);
+		}
+		std::vector<VkPhysicalDevice> devices(device_count);
+		vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
+		for (const auto& device : devices) {
+			if (IsDeviceSuitable(device)) {
+				physical_device = device;
+				break;
+			}
+		}
+		if (physical_device == VK_NULL_HANDLE) {
+			assert(0);
+		}
+	}
+
+	bool IsDeviceSuitable(VkPhysicalDevice device) {
+		QueueFamilyIndices indices = FindQueueFamilies(device);
+
+		return indices.IsComplete();
+	}
+
+	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device) {
+		QueueFamilyIndices indices;
+
+		uint32_t queue_family_count;
+		vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
+		std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+		vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
+		int i = 0;
+		for (const auto& queue_family : queue_families) {
+			if (queue_family.queueCount > 0 && queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+				indices.graphics_family = i;
+			}
+			if (indices.IsComplete()) {
+				break;
+			}
+			++i;
+		}
+
+		return indices;
+	}
+
 	void MainLoop() {
 		while (!glfwWindowShouldClose(window)) {
 			glfwPollEvents();
@@ -206,6 +261,7 @@ private:
 	GLFWwindow* window;
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT callback;
+	VkPhysicalDevice physical_device = VK_NULL_HANDLE;
 };
 
 int main() {
