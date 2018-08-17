@@ -6,6 +6,7 @@
 #include <set>
 #include <assert.h>
 #include <algorithm>
+#include <fstream>
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
@@ -106,6 +107,24 @@ VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
 	}
 }
 
+std::vector<char> ReadFile(const std::string& filename) {
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open()) {
+		assert(0);
+	}
+
+	size_t file_size = (size_t)file.tellg();
+	std::vector<char> buffer(file_size);
+
+	file.seekg(0);
+	file.read(buffer.data(), file_size);
+
+	file.close();
+
+	return buffer;
+}
+
 class HelloTriangleApplication {
 public:
 	void Run() {
@@ -133,6 +152,7 @@ private:
 		CreateLogicalDevice();
 		CreateSwapChain();
 		CreateImageViews();
+		CreateGraphicsPipeline();
 	}
 
 	void CreateInstance() {
@@ -469,6 +489,45 @@ return VK_FALSE;
 				assert(0);
 			}
 		}
+	}
+
+	void CreateGraphicsPipeline() {
+		auto vert_shader_code = ReadFile("shaders/vert.spv");
+		auto frag_shader_code = ReadFile("shaders/frag.spv");
+
+		VkShaderModule vert_shader_module = CreateShaderModule(vert_shader_code);
+		VkShaderModule frag_shader_module = CreateShaderModule(frag_shader_code);
+
+		VkPipelineShaderStageCreateInfo vert_create_info = {};
+		vert_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		vert_create_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+		vert_create_info.module = vert_shader_module;
+		vert_create_info.pName = "main";
+
+		VkPipelineShaderStageCreateInfo frag_create_info = {};
+		frag_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		frag_create_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+		frag_create_info.module = frag_shader_module;
+		frag_create_info.pName = "main";
+
+		VkPipelineShaderStageCreateInfo shader_stages[] = { vert_create_info, frag_create_info };
+
+		vkDestroyShaderModule(device, vert_shader_module, nullptr);
+		vkDestroyShaderModule(device, frag_shader_module, nullptr);
+	}
+
+	VkShaderModule CreateShaderModule(const std::vector<char>& code) {
+		VkShaderModuleCreateInfo create_info = {};
+		create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		create_info.codeSize = code.size();
+		create_info.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+		VkShaderModule shader_module;
+		if (vkCreateShaderModule(device, &create_info, nullptr, &shader_module) != VK_SUCCESS) {
+			assert(0);
+		}
+
+		return shader_module;
 	}
 
 	void MainLoop() {

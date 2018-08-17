@@ -2,7 +2,24 @@ cmake_minimum_required(VERSION 3.12)
 
 add_subdirectory(thirdparty/glfw)
 
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/shaders)
+
+add_custom_command(
+	OUTPUT vert.spv
+	COMMAND glslangValidator.exe -V ${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader.vert -o ${CMAKE_CURRENT_BINARY_DIR}/shaders/vert.spv
+	DEPENDS shader/shader.vert
+	)
+
+add_custom_command(
+	OUTPUT frag.spv
+	COMMAND glslangValidator.exe -V ${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader.frag -o ${CMAKE_CURRENT_BINARY_DIR}/shaders/frag.spv
+	DEPENDS shader/shader.frag
+	)
+
 add_executable(vulkan_tutorial 
-	src/main.cc)
+	src/main.cc
+	${CMAKE_CURRENT_BINARY_DIR}/vert.spv
+	${CMAKE_CURRENT_BINARY_DIR}/frag.spv
+	)
 target_include_directories(vulkan_tutorial PRIVATE ${VULKAN_INCLUDE_DIR})
 target_link_libraries(vulkan_tutorial PRIVATE glfw ${VULKAN_LIBRARY})
