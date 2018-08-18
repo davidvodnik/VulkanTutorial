@@ -633,15 +633,15 @@ return VK_FALSE;
 
 		// Dynamic state
 
-		VkDynamicState dynamic_states[] = {
-			VK_DYNAMIC_STATE_VIEWPORT,
-			VK_DYNAMIC_STATE_LINE_WIDTH
-		};
+		//VkDynamicState dynamic_states[] = {
+		//	VK_DYNAMIC_STATE_VIEWPORT,
+		//	VK_DYNAMIC_STATE_LINE_WIDTH
+		//};
 
-		VkPipelineDynamicStateCreateInfo dynamic_state = {};
-		dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-		dynamic_state.dynamicStateCount = 2;
-		dynamic_state.pDynamicStates = dynamic_states;
+		//VkPipelineDynamicStateCreateInfo dynamic_state = {};
+		//dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+		//dynamic_state.dynamicStateCount = 2;
+		//dynamic_state.pDynamicStates = dynamic_states;
 
 		// Pipeline layout
 
@@ -653,6 +653,30 @@ return VK_FALSE;
 		pipeline_layout_info.pPushConstantRanges = nullptr;
 
 		if (vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &pipeline_layout) != VK_SUCCESS) {
+			assert(0);
+		}
+
+		// Pipeline
+
+		VkGraphicsPipelineCreateInfo pipeline_info = {};
+		pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		pipeline_info.stageCount = 2;
+		pipeline_info.pStages = shader_stages;
+		pipeline_info.pVertexInputState = &vertex_input_info;
+		pipeline_info.pInputAssemblyState = &input_assembly;
+		pipeline_info.pViewportState = &viewport_state;
+		pipeline_info.pRasterizationState = &rasterizer;
+		pipeline_info.pMultisampleState = &multisampling;
+		pipeline_info.pDepthStencilState = nullptr;
+		pipeline_info.pColorBlendState = &color_blending;
+		pipeline_info.pDynamicState = nullptr;
+		pipeline_info.layout = pipeline_layout;
+		pipeline_info.renderPass = render_pass;
+		pipeline_info.subpass = 0;
+		pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
+		pipeline_info.basePipelineIndex = -1;
+
+		if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &graphics_pipeline) != VK_SUCCESS) {
 			assert(0);
 		}
 
@@ -681,6 +705,8 @@ return VK_FALSE;
 	}
 
 	void Cleanup() {
+		vkDestroyPipeline(device, graphics_pipeline, nullptr);
+
 		vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
 
 		vkDestroyRenderPass(device, render_pass, nullptr);
@@ -720,6 +746,7 @@ return VK_FALSE;
 	std::vector<VkImageView> swap_chain_image_views;
 	VkRenderPass render_pass;
 	VkPipelineLayout pipeline_layout;
+	VkPipeline graphics_pipeline;
 };
 
 int main() {
