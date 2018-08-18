@@ -155,6 +155,8 @@ private:
 		CreateRenderPass();
 		CreateGraphicsPipeline();
 		CreateFramebuffers();
+		CreateCommandPool();
+		CreateCommandBuffers();
 	}
 
 	void CreateInstance() {
@@ -721,6 +723,67 @@ return VK_FALSE;
 		}
 	}
 
+	void CreateCommandPool() {
+		QueueFamilyIndices queue_family_indices = FindQueueFamilies(physical_device);
+
+		VkCommandPoolCreateInfo pool_info = {};
+		pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		pool_info.queueFamilyIndex = queue_family_indices.graphics_family;
+		pool_info.flags = 0;
+
+		if (vkCreateCommandPool(device, &pool_info, nullptr, &command_pool) != VK_SUCCESS) {
+			assert(0);
+		}
+	}
+
+	void CreateCommandBuffers() {
+		command_buffers.resize(swap_chain_framebuffers.size());
+
+		VkCommandBufferAllocateInfo alloc_info = {};
+		alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		alloc_info.commandPool = command_pool;
+		alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		alloc_info.commandBufferCount = (uint32_t)command_buffers.size();
+
+		if (vkAllocateCommandBuffers(device, &alloc_info, command_buffers.data()) != VK_SUCCESS) {
+			assert(0);
+		}
+
+		for (size_t i = 0; i < command_buffers.size(); ++i) {
+			VkCommandBufferBeginInfo begin_info = {};
+			begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			begin_info.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+			begin_info.pInheritanceInfo = nullptr;
+
+			if (vkBeginCommandBuffer(command_buffers[i], &begin_info) != VK_SUCCESS) {
+				assert(0);
+			}
+
+			VkRenderPassBeginInfo render_pass_info = {};
+			render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+			render_pass_info.renderPass = render_pass;
+			render_pass_info.framebuffer = swap_chain_framebuffers[i];
+			render_pass_info.renderArea.offset = { 0,0 };
+			render_pass_info.renderArea.extent = swap_chain_extent;
+
+			VkClearValue clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
+			render_pass_info.clearValueCount = 1;
+			render_pass_info.pClearValues = &clear_color;
+
+			vkCmdBeginRenderPass(command_buffers[i], &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+			vkCmdBindPipeline(command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
+
+			vkCmdDraw(command_buffers[i], 3, 1, 0, 0);
+
+			vkCmdEndRenderPass(command_buffers[i]);
+
+			if (vkEndCommandBuffer(command_buffers[i]) != VK_SUCCESS) {
+				assert(0);
+			}
+		}
+	}
+
 	void MainLoop() {
 		while (!glfwWindowShouldClose(window)) {
 			glfwPollEvents();
@@ -728,6 +791,8 @@ return VK_FALSE;
 	}
 
 	void Cleanup() {
+		vkDestroyCommandPool(device, command_pool, nullptr);
+
 		for (auto framebuffer : swap_chain_framebuffers) {
 			vkDestroyFramebuffer(device, framebuffer, nullptr);
 		}
@@ -775,6 +840,8 @@ return VK_FALSE;
 	VkPipelineLayout pipeline_layout;
 	VkPipeline graphics_pipeline;
 	std::vector<VkFramebuffer> swap_chain_framebuffers;
+	VkCommandPool command_pool;
+	std::vector<VkCommandBuffer> command_buffers;
 };
 
 int main() {
