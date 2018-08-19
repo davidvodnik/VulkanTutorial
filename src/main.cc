@@ -198,6 +198,7 @@ private:
 		CreateGraphicsPipeline();
 		CreateFramebuffers();
 		CreateCommandPool();
+		CreateVertexBuffers();
 		CreateCommandBuffers();
 		CreateSemaphores();
 	}
@@ -792,6 +793,50 @@ return VK_FALSE;
 		}
 	}
 
+	void CreateVertexBuffers() {
+		VkBufferCreateInfo buffer_info = {};
+		buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		buffer_info.size = sizeof(vertices[0]) * vertices.size();
+		buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		if (vkCreateBuffer(device, &buffer_info, nullptr, &vertex_buffer) != VK_SUCCESS) {
+			assert(0);
+		}
+
+		VkMemoryRequirements mem_requirements;
+		vkGetBufferMemoryRequirements(device, vertex_buffer, &mem_requirements);
+
+		VkMemoryAllocateInfo alloc_info = {};
+		alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		alloc_info.allocationSize = mem_requirements.size;
+		alloc_info.memoryTypeIndex = FindMemoryType(mem_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		if (vkAllocateMemory(device, &alloc_info, nullptr, &vertex_buffer_memory) != VK_SUCCESS) {
+			assert(0);
+		}
+
+		vkBindBufferMemory(device, vertex_buffer, vertex_buffer_memory, 0);
+
+		void* data;
+		vkMapMemory(device, vertex_buffer_memory, 0, buffer_info.size, 0, &data);
+		memcpy(data, vertices.data(), (size_t)buffer_info.size);
+		vkUnmapMemory(device, vertex_buffer_memory);
+	}
+
+	uint32_t FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties) {
+		VkPhysicalDeviceMemoryProperties mem_properties;
+		vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_properties);
+
+		for (uint32_t i = 0; i < mem_properties.memoryTypeCount; ++i) {
+			if (type_filter & (1 << i) && (mem_properties.memoryTypes[i].propertyFlags & properties) == properties) {
+				return i;
+			}
+		}
+
+		assert(0);
+	}
+
 	void CreateCommandBuffers() {
 		command_buffers.resize(swap_chain_framebuffers.size());
 
@@ -830,7 +875,11 @@ return VK_FALSE;
 
 			vkCmdBindPipeline(command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
 
-			vkCmdDraw(command_buffers[i], 3, 1, 0, 0);
+			VkBuffer vertex_buffers[] = { vertex_buffer };
+			VkDeviceSize offsets[] = {0};
+			vkCmdBindVertexBuffers(command_buffers[i], 0, 1, vertex_buffers, offsets);
+
+			vkCmdDraw(command_buffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
 			vkCmdEndRenderPass(command_buffers[i]);
 
@@ -972,6 +1021,10 @@ return VK_FALSE;
 
 		CLeanupSwapChain();
 
+		vkDestroyBuffer(device, vertex_buffer, nullptr);
+
+		vkFreeMemory(device, vertex_buffer_memory, nullptr);
+
 		vkDestroyCommandPool(device, command_pool, nullptr);
 
 		vkDestroyDevice(device, nullptr);
@@ -1007,6 +1060,8 @@ return VK_FALSE;
 	VkPipeline graphics_pipeline;
 	std::vector<VkFramebuffer> swap_chain_framebuffers;
 	VkCommandPool command_pool;
+	VkBuffer vertex_buffer;
+	VkDeviceMemory vertex_buffer_memory;
 	std::vector<VkCommandBuffer> command_buffers;
 	std::vector<VkSemaphore> image_available_semaphores;
 	std::vector<VkSemaphore> render_finished_semaphores;
