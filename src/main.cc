@@ -477,7 +477,7 @@ return VK_FALSE;
 		for (size_t i = 0; i < swap_chain_image_views.size(); ++i) {
 			VkImageViewCreateInfo create_info = {};
 			create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			create_info.image = swap_chain_images[0];
+			create_info.image = swap_chain_images[i];
 			create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
 			create_info.format = swap_chain_image_format;
 			create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
