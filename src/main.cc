@@ -1,6 +1,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <iostream>
 #include <vector>
@@ -9,6 +10,7 @@
 #include <assert.h>
 #include <algorithm>
 #include <fstream>
+#include <chrono>
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
@@ -18,6 +20,12 @@ const int MAX_FRAMES_IN_FLIGHT = 2;
 struct Vertex {
 	glm::vec2 pos;
 	glm::vec3 color;
+};
+
+struct UniformBufferObject {
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
 };
 
 VkVertexInputBindingDescription GetBindingDescription() {
@@ -200,11 +208,13 @@ private:
 		CreateSwapChain();
 		CreateImageViews();
 		CreateRenderPass();
+		CreateDescriptorSetLayout();
 		CreateGraphicsPipeline();
 		CreateFramebuffers();
 		CreateCommandPool();
 		CreateVertexBuffers();
 		CreateIndexBuffers();
+		CreateUniformBuffers();
 		CreateCommandBuffers();
 		CreateSemaphores();
 	}
@@ -587,6 +597,24 @@ return VK_FALSE;
 		}
 	}
 
+	void CreateDescriptorSetLayout() {
+		VkDescriptorSetLayoutBinding ubo_layout_binding = {};
+		ubo_layout_binding.binding = 0;
+		ubo_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		ubo_layout_binding.descriptorCount = 1;
+		ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		ubo_layout_binding.pImmutableSamplers = nullptr;
+
+		VkDescriptorSetLayoutCreateInfo layout_info = {};
+		layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layout_info.bindingCount = 1;
+		layout_info.pBindings = &ubo_layout_binding;
+
+		if (vkCreateDescriptorSetLayout(device, &layout_info, nullptr, &descriptor_set_layout) != VK_SUCCESS) {
+			assert(0);
+		}
+	}
+
 	void CreateGraphicsPipeline() {
 		auto vert_shader_code = ReadFile("shaders/vert.spv");
 		auto frag_shader_code = ReadFile("shaders/frag.spv");
@@ -713,8 +741,8 @@ return VK_FALSE;
 
 		VkPipelineLayoutCreateInfo pipeline_layout_info = {};
 		pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipeline_layout_info.setLayoutCount = 0;
-		pipeline_layout_info.pSetLayouts = nullptr;
+		pipeline_layout_info.setLayoutCount = 1;
+		pipeline_layout_info.pSetLayouts = &descriptor_set_layout;
 		pipeline_layout_info.pushConstantRangeCount = 0;
 		pipeline_layout_info.pPushConstantRanges = nullptr;
 
@@ -839,6 +867,17 @@ return VK_FALSE;
 		vkDestroyBuffer(device, staging_buffer, nullptr);
 
 		vkFreeMemory(device, staging_buffer_memory, nullptr);
+	}
+
+	void CreateUniformBuffers() {
+		VkDeviceSize buffer_size = sizeof(UniformBufferObject);
+
+		uniform_buffers.resize(swap_chain_images.size());
+		uniform_buffers_memory.resize(swap_chain_images.size());
+
+		for (size_t i = 0; i < swap_chain_images.size(); ++i) {
+			CreateBuffer(buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniform_buffers[i], uniform_buffers_memory[i]);
+		}
 	}
 
 	void CopyBuffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size) {
@@ -1048,6 +1087,8 @@ return VK_FALSE;
 			assert(0);
 		}
 
+		UpdateUniformBuffer(image_index);
+
 		VkSubmitInfo submit_info = {};
 		submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -1091,6 +1132,24 @@ return VK_FALSE;
 		current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 
+	void UpdateUniformBuffer(uint32_t current_image) {
+		static auto start_time = std::chrono::high_resolution_clock::now();
+
+		auto current_time = std::chrono::high_resolution_clock::now();
+		float time = std::chrono::duration<float, std::chrono::seconds::period>(current_time - start_time).count();
+
+		UniformBufferObject ubo = {};
+		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+		ubo.proj = glm::perspective(glm::radians(45.0f), swap_chain_extent.width / (float)swap_chain_extent.height, 0.1f, 10.0f);
+		ubo.proj[1][1] *= -1;
+
+		void* data;
+		vkMapMemory(device, uniform_buffers_memory[current_image], 0, sizeof(ubo), 0, &data);
+		memcpy(data, &ubo, sizeof(ubo));
+		vkUnmapMemory(device, uniform_buffers_memory[current_image]);
+	}
+
 	void Cleanup() {
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 			vkDestroySemaphore(device, render_finished_semaphores[i], nullptr);
@@ -1099,6 +1158,13 @@ return VK_FALSE;
 		}
 
 		CLeanupSwapChain();
+
+		vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
+
+		for (size_t i = 0; i < swap_chain_images.size(); ++i) {
+			vkDestroyBuffer(device, uniform_buffers[i], nullptr);
+			vkFreeMemory(device, uniform_buffers_memory[i], nullptr);
+		}
 
 		vkDestroyBuffer(device, index_buffer, nullptr);
 		vkFreeMemory(device, index_buffer_memory, nullptr);
@@ -1137,6 +1203,7 @@ return VK_FALSE;
 	VkExtent2D swap_chain_extent;
 	std::vector<VkImageView> swap_chain_image_views;
 	VkRenderPass render_pass;
+	VkDescriptorSetLayout descriptor_set_layout;
 	VkPipelineLayout pipeline_layout;
 	VkPipeline graphics_pipeline;
 	std::vector<VkFramebuffer> swap_chain_framebuffers;
@@ -1145,6 +1212,8 @@ return VK_FALSE;
 	VkDeviceMemory vertex_buffer_memory;
 	VkBuffer index_buffer;
 	VkDeviceMemory index_buffer_memory;
+	std::vector<VkBuffer> uniform_buffers;
+	std::vector<VkDeviceMemory> uniform_buffers_memory;
 	std::vector<VkCommandBuffer> command_buffers;
 	std::vector<VkSemaphore> image_available_semaphores;
 	std::vector<VkSemaphore> render_finished_semaphores;
