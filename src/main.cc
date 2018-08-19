@@ -95,12 +95,14 @@ VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& avai
 	return best_mode;
 }
 
-VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window) {
 	if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
 		return capabilities.currentExtent;
 	}
 	else {
-		VkExtent2D actual_extent = { WIDTH, HEIGHT };
+		int width, height;
+		glfwGetFramebufferSize(window, &width, &height);
+		VkExtent2D actual_extent = { width, height };
 
 		actual_extent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actual_extent.width));
 		actual_extent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actual_extent.height));
@@ -141,7 +143,7 @@ private:
 		glfwInit();
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_FALSE);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
 		window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 	}
@@ -425,7 +427,7 @@ return VK_FALSE;
 
 		VkSurfaceFormatKHR surface_format = ChooseSwapSurfaceFormat(swap_chain_support.formats);
 		VkPresentModeKHR present_mode = ChooseSwapPresentMode(swap_chain_support.present_modes);
-		VkExtent2D extent = ChooseSwapExtent(swap_chain_support.capabilities);
+		VkExtent2D extent = ChooseSwapExtent(swap_chain_support.capabilities, window);
 
 		uint32_t image_count = swap_chain_support.capabilities.minImageCount + 1;
 		if (swap_chain_support.capabilities.maxImageCount > 0 && image_count > swap_chain_support.capabilities.maxImageCount) {
@@ -818,6 +820,43 @@ return VK_FALSE;
 		}
 	}
 
+	void CLeanupSwapChain() {
+		vkFreeCommandBuffers(device, command_pool, static_cast<uint32_t>(command_buffers.size()), command_buffers.data());
+
+		for (auto framebuffer : swap_chain_framebuffers) {
+			vkDestroyFramebuffer(device, framebuffer, nullptr);
+		}
+
+		vkDestroyPipeline(device, graphics_pipeline, nullptr);
+
+		vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
+
+		vkDestroyRenderPass(device, render_pass, nullptr);
+
+		for (auto image_view : swap_chain_image_views) {
+			vkDestroyImageView(device, image_view, nullptr);
+		}
+		vkDestroySwapchainKHR(device, swap_chain, nullptr);
+	}
+
+	void RecreateSwapChain() {
+		int width = 0, height = 0;
+		while (width == 0 || height == 0) {
+			glfwGetFramebufferSize(window, &width, &height);
+			glfwWaitEvents();
+		}
+		vkDeviceWaitIdle(device);
+
+		CLeanupSwapChain();
+
+		CreateSwapChain();
+		CreateImageViews();
+		CreateRenderPass();
+		CreateGraphicsPipeline();
+		CreateFramebuffers();
+		CreateCommandBuffers();
+	}
+
 	void MainLoop() {
 		while (!glfwWindowShouldClose(window)) {
 			glfwPollEvents();
@@ -829,10 +868,16 @@ return VK_FALSE;
 
 	void DrawFrame() {
 		vkWaitForFences(device, 1, &in_flight_fences[current_frame], VK_TRUE, std::numeric_limits<uint64_t>::max());
-		vkResetFences(device, 1, &in_flight_fences[current_frame]);
 
 		uint32_t image_index;
-		vkAcquireNextImageKHR(device, swap_chain, std::numeric_limits<uint64_t>::max(), image_available_semaphores[current_frame], VK_NULL_HANDLE, &image_index);
+		VkResult result = vkAcquireNextImageKHR(device, swap_chain, std::numeric_limits<uint64_t>::max(), image_available_semaphores[current_frame], VK_NULL_HANDLE, &image_index);
+		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+			RecreateSwapChain();
+			return;
+		}
+		else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+			assert(0);
+		}
 
 		VkSubmitInfo submit_info = {};
 		submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -849,6 +894,8 @@ return VK_FALSE;
 		submit_info.signalSemaphoreCount = 1;
 		submit_info.pSignalSemaphores = signal_semaphores;
 
+		vkResetFences(device, 1, &in_flight_fences[current_frame]);
+
 		if (vkQueueSubmit(graphics_queue, 1, &submit_info, in_flight_fences[current_frame]) != VK_SUCCESS) {
 			assert(0);
 		}
@@ -864,7 +911,13 @@ return VK_FALSE;
 		present_info.pImageIndices = &image_index;
 		present_info.pResults = nullptr;
 
-		vkQueuePresentKHR(present_queue, &present_info);
+		result = vkQueuePresentKHR(present_queue, &present_info);
+		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+			RecreateSwapChain();
+		}
+		else if (result != VK_SUCCESS) {
+			assert(0);
+		}
 
 		current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
@@ -876,22 +929,9 @@ return VK_FALSE;
 			vkDestroyFence(device, in_flight_fences[i], nullptr);
 		}
 
+		CLeanupSwapChain();
+
 		vkDestroyCommandPool(device, command_pool, nullptr);
-
-		for (auto framebuffer : swap_chain_framebuffers) {
-			vkDestroyFramebuffer(device, framebuffer, nullptr);
-		}
-
-		vkDestroyPipeline(device, graphics_pipeline, nullptr);
-
-		vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
-
-		vkDestroyRenderPass(device, render_pass, nullptr);
-
-		for (auto image_view : swap_chain_image_views) {
-			vkDestroyImageView(device, image_view, nullptr);
-		}
-		vkDestroySwapchainKHR(device, swap_chain, nullptr);
 
 		vkDestroyDevice(device, nullptr);
 
