@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 
 add_subdirectory(thirdparty/glfw)
+add_subdirectory(thirdparty/glm)
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 
@@ -21,5 +22,5 @@ add_executable(vulkan_tutorial
 	${CMAKE_CURRENT_BINARY_DIR}/vert.spv
 	${CMAKE_CURRENT_BINARY_DIR}/frag.spv
 	)
+target_link_libraries(vulkan_tutorial PRIVATE glfw ${VULKAN_LIBRARY} glm)
 target_include_directories(vulkan_tutorial PRIVATE ${VULKAN_INCLUDE_DIR})
-target_link_libraries(vulkan_tutorial PRIVATE glfw ${VULKAN_LIBRARY})

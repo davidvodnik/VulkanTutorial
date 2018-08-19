@@ -1,8 +1,10 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 
 #include <iostream>
 #include <vector>
+#include <array>
 #include <set>
 #include <assert.h>
 #include <algorithm>
@@ -12,6 +14,42 @@ const int WIDTH = 800;
 const int HEIGHT = 600;
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
+
+struct Vertex {
+	glm::vec2 pos;
+	glm::vec3 color;
+};
+
+VkVertexInputBindingDescription GetBindingDescription() {
+	VkVertexInputBindingDescription binding_description = {};
+	binding_description.binding = 0;
+	binding_description.stride = sizeof(Vertex);
+	binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+	return binding_description;
+}
+
+std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescription() {
+	std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions = {};
+
+	attribute_descriptions[0].binding = 0;
+	attribute_descriptions[0].location = 0;
+	attribute_descriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+	attribute_descriptions[0].offset = offsetof(Vertex, pos);
+
+	attribute_descriptions[1].binding = 0;
+	attribute_descriptions[1].location = 1;
+	attribute_descriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+	attribute_descriptions[1].offset = offsetof(Vertex, color);
+
+	return attribute_descriptions;
+}
+
+const std::vector<Vertex> vertices = {
+	{{0.0f,-0.5f},{1.0f,0.0f,0.0f}},
+	{{0.5f,0.5f},{0.0f,1.0f,0.0f}},
+	{{-0.5f,0.5f},{0.0f,0.0f,1.0f}},
+};
 
 const std::vector<const char*> validation_layers = {
 	"VK_LAYER_LUNARG_standard_validation"
@@ -564,13 +602,16 @@ return VK_FALSE;
 		VkPipelineShaderStageCreateInfo shader_stages[] = { vert_create_info, frag_create_info };
 
 		// Vertex input
+		
+		auto binding_description = GetBindingDescription();
+		auto attribute_description = GetAttributeDescription();
 
 		VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
 		vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertex_input_info.vertexBindingDescriptionCount = 0;
-		vertex_input_info.pVertexBindingDescriptions = nullptr;
-		vertex_input_info.vertexAttributeDescriptionCount = 0;
-		vertex_input_info.pVertexAttributeDescriptions = nullptr;
+		vertex_input_info.vertexBindingDescriptionCount = 1;
+		vertex_input_info.pVertexBindingDescriptions = &binding_description;
+		vertex_input_info.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_description.size());
+		vertex_input_info.pVertexAttributeDescriptions = attribute_description.data();
 
 		// Input assembly
 
