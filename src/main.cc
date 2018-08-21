@@ -215,6 +215,8 @@ private:
 		CreateVertexBuffers();
 		CreateIndexBuffers();
 		CreateUniformBuffers();
+		CreateDescriptorPool();
+		CreateDescriptorSets();
 		CreateCommandBuffers();
 		CreateSemaphores();
 	}
@@ -685,7 +687,7 @@ return VK_FALSE;
 		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 		rasterizer.lineWidth = 1.0f;
 		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizer.depthBiasEnable = VK_FALSE;
 		rasterizer.depthBiasConstantFactor = 0.0f;
 		rasterizer.depthBiasClamp = 0.0f;
@@ -940,6 +942,56 @@ return VK_FALSE;
 		vkBindBufferMemory(device, buffer, buffer_memory, 0);
 	}
 
+	void CreateDescriptorPool() {
+		VkDescriptorPoolSize pool_size = {};
+		pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		pool_size.descriptorCount = static_cast<uint32_t>(swap_chain_images.size());
+
+		VkDescriptorPoolCreateInfo pool_info = {};
+		pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		pool_info.poolSizeCount = 1;
+		pool_info.pPoolSizes = &pool_size;
+		pool_info.maxSets = static_cast<uint32_t>(swap_chain_images.size());
+		if (vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptor_pool) != VK_SUCCESS) {
+			assert(0);
+		}
+	}
+
+	void CreateDescriptorSets() {
+		std::vector<VkDescriptorSetLayout> layouts(swap_chain_images.size(), descriptor_set_layout);
+		VkDescriptorSetAllocateInfo alloc_info = {};
+		alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		alloc_info.descriptorPool = descriptor_pool;
+		alloc_info.descriptorSetCount = static_cast<uint32_t>(swap_chain_images.size());
+		alloc_info.pSetLayouts = layouts.data();
+
+		descriptor_sets.resize(swap_chain_images.size());
+
+		if (vkAllocateDescriptorSets(device, &alloc_info, descriptor_sets.data()) != VK_SUCCESS) {
+			assert(0);
+		}
+
+		for (size_t i = 0; i < swap_chain_images.size(); ++i) {
+			VkDescriptorBufferInfo buffer_info = {};
+			buffer_info.buffer = uniform_buffers[i];
+			buffer_info.offset = 0;
+			buffer_info.range = sizeof(UniformBufferObject);
+
+			VkWriteDescriptorSet descriptor_write = {};
+			descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptor_write.dstSet = descriptor_sets[i];
+			descriptor_write.dstBinding = 0;
+			descriptor_write.dstArrayElement = 0;
+			descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptor_write.descriptorCount = 1;
+			descriptor_write.pBufferInfo = &buffer_info;
+			descriptor_write.pImageInfo = nullptr;
+			descriptor_write.pTexelBufferView = nullptr;
+
+			vkUpdateDescriptorSets(device, 1, &descriptor_write, 0, nullptr);
+		}
+	}
+
 	uint32_t FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties) {
 		VkPhysicalDeviceMemoryProperties mem_properties;
 		vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_properties);
@@ -996,6 +1048,8 @@ return VK_FALSE;
 			vkCmdBindVertexBuffers(command_buffers[i], 0, 1, vertex_buffers, offsets);
 
 			vkCmdBindIndexBuffer(command_buffers[i], index_buffer, 0, VK_INDEX_TYPE_UINT16);
+
+			vkCmdBindDescriptorSets(command_buffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &descriptor_sets[i], 0, nullptr);
 
 			vkCmdDrawIndexed(command_buffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
@@ -1159,6 +1213,8 @@ return VK_FALSE;
 
 		CLeanupSwapChain();
 
+		vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
+
 		vkDestroyDescriptorSetLayout(device, descriptor_set_layout, nullptr);
 
 		for (size_t i = 0; i < swap_chain_images.size(); ++i) {
@@ -1212,6 +1268,8 @@ return VK_FALSE;
 	VkDeviceMemory vertex_buffer_memory;
 	VkBuffer index_buffer;
 	VkDeviceMemory index_buffer_memory;
+	VkDescriptorPool descriptor_pool;
+	std::vector<VkDescriptorSet> descriptor_sets;
 	std::vector<VkBuffer> uniform_buffers;
 	std::vector<VkDeviceMemory> uniform_buffers_memory;
 	std::vector<VkCommandBuffer> command_buffers;
